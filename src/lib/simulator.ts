@@ -8,8 +8,6 @@ export class Simulator {
   private points: Point[] = [];
   private last: number;
 
-  private frameCount = 0;
-
   constructor(private canvas: HTMLCanvasElement, { density = DENSITY } = {}) {
     this.population =
       (this.canvas.width * this.canvas.height) / (5000 / density);
@@ -21,11 +19,6 @@ export class Simulator {
 
   public start = () => {
     window.requestAnimationFrame(this.loop);
-
-    setInterval(() => {
-      console.log("fps", this.frameCount);
-      this.frameCount = 0;
-    }, 1000);
   };
 
   private loop = timestamp => {
@@ -73,7 +66,6 @@ export class Simulator {
     });
 
     this.last = timestamp;
-    this.frameCount++;
 
     window.requestAnimationFrame(this.loop);
   };
@@ -129,6 +121,7 @@ export class Simulator {
     const distance = point.distance(other);
 
     ctx.beginPath();
+
     ctx.moveTo(point.x, point.y);
     ctx.lineTo(other.x, other.y);
 
