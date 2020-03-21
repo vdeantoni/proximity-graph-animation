@@ -1,0 +1,25 @@
+{
+  "name": "proximity-graph-simulator",
+  "version": "1.0.0",
+  "description": "A library for simulating proximity graphs",
+  "scripts": {
+    "dev": "parcel src/index.html",
+    "build": "parcel build src/index.html",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vdeantoni/proximity-graph-simulator.git"
+  },
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vdeantoni/proximity-graph-simulator/issues"
+  },
+  "homepage": "https://github.com/vdeantoni/proximity-graph-simulator#readme",
+  "devDependencies": {
+    "parcel-bundler": "^1.12.4",
+    "sass": "^1.26.3",
+    "typescript": "^3.8.3"
+  }
+}
