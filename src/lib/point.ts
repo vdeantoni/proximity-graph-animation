@@ -1,4 +1,4 @@
-import { getRandomInRange } from "./utils";
+import { random } from "lodash";
 import { MAX_SPEED, MAX_RADIUS, MIN_RADIUS } from "./constants";
 
 export class Point {
@@ -22,11 +22,11 @@ export class Point {
 
   public static create(w: number, h: number) {
     return new Point(
-      getRandomInRange(0, w),
-      getRandomInRange(0, h),
-      getRandomInRange(-MAX_SPEED, MAX_SPEED),
-      getRandomInRange(-MAX_SPEED, MAX_SPEED),
-      getRandomInRange(MIN_RADIUS, MAX_RADIUS),
+      random(0, w),
+      random(0, h),
+      random(-MAX_SPEED, MAX_SPEED),
+      random(-MAX_SPEED, MAX_SPEED),
+      random(MIN_RADIUS, MAX_RADIUS),
       "white"
     );
   }

@@ -19,7 +19,9 @@
   "homepage": "https://github.com/vdeantoni/proximity-graph-simulator#readme",
   "devDependencies": {
     "parcel-bundler": "^1.12.4",
-    "sass": "^1.26.3",
-    "typescript": "^3.8.3"
+    "typescript": "^3.9.5"
+  },
+  "dependencies": {
+    "lodash": "^4.17.15"
   }
 }

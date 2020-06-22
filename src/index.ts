@@ -1,5 +1,3 @@
-import { getRandomInRange } from "./lib/utils";
-import { FPS } from "./lib/constants";
 import { Simulator } from "./lib/simulator";
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement;
