@@ -2,26 +2,33 @@
   "name": "proximity-graph-simulator",
   "version": "1.0.0",
   "description": "A library for simulating proximity graphs",
-  "scripts": {
-    "dev": "parcel src/index.html",
-    "build": "parcel build --public-url . src/index.html",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vdeantoni/proximity-graph-simulator.git"
   },
-  "author": "",
+  "author": "Vinicius De Antoni <vdeantoni@gmail.com>",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/vdeantoni/proximity-graph-simulator/issues"
   },
   "homepage": "https://github.com/vdeantoni/proximity-graph-simulator#readme",
-  "devDependencies": {
-    "parcel-bundler": "^1.12.4",
-    "typescript": "^3.9.5"
+  "scripts": {
+    "start": "snowpack dev",
+    "build": "snowpack build",
+    "test": "echo \"This template does not include a test runner by default.\" && exit 1",
+    "format": "prettier --write \"src/**/*.{ts,js}\"",
+    "lint": "prettier --check \"src/**/*.{ts,js}\""
   },
   "dependencies": {
     "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "@snowpack/plugin-typescript": "^1.2.1",
+    "@types/canvas-confetti": "^1.0.0",
+    "@types/lodash": "^4.14.170",
+    "@types/snowpack-env": "^2.3.3",
+    "prettier": "^2.2.1",
+    "snowpack": "^3.3.7",
+    "typescript": "^4.2.4"
   }
 }

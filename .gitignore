@@ -1,3 +1,4 @@
-dist
+.snowpack
+build
 node_modules
-.cache
+.idea

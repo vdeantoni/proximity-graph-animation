@@ -1,12 +1,12 @@
-import { CONNECT_DISTANCE, DENSITY, FPS } from "./constants";
-import { Point } from "./point";
+import { CONNECT_DISTANCE, DENSITY, FPS } from './constants';
+import { Point } from './point';
 
 const TIME_PER_FRAME = 1000 / FPS;
 
 export class Simulator {
   private population: number;
   private points: Point[] = [];
-  private last: number;
+  private last: number = 0;
 
   constructor(private canvas: HTMLCanvasElement, { density = DENSITY } = {}) {
     this.population =
@@ -14,14 +14,14 @@ export class Simulator {
   }
 
   private getContext() {
-    return this.canvas.getContext("2d");
+    return this.canvas.getContext('2d')!;
   }
 
   public start = () => {
     window.requestAnimationFrame(this.loop);
   };
 
-  private loop = timestamp => {
+  private loop = (timestamp: number) => {
     const delta = !this.last ? 1 : (timestamp - this.last) / TIME_PER_FRAME;
 
     for (let i = this.points.length; i < this.population; i++) {
@@ -34,7 +34,7 @@ export class Simulator {
 
     this.drawBackground();
 
-    this.points.forEach(point => {
+    this.points.forEach((point) => {
       point.move(delta);
 
       if (point.x < -CONNECT_DISTANCE) {
@@ -51,17 +51,17 @@ export class Simulator {
     });
 
     const connections = new Map<Point, Set<Point>>();
-    this.points.forEach(point => {
+    this.points.forEach((point) => {
       this.processConnections(point, connections);
     });
 
     connections.forEach((others, point) => {
-      others.forEach(other => {
+      others.forEach((other) => {
         this.drawConnection(point, other);
       });
     });
 
-    this.points.forEach(point => {
+    this.points.forEach((point) => {
       this.drawPoint(point);
     });
 
@@ -72,7 +72,7 @@ export class Simulator {
 
   private drawBackground() {
     const ctx = this.getContext();
-    ctx.fillStyle = "black";
+    ctx.fillStyle = 'black';
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
@@ -86,7 +86,7 @@ export class Simulator {
 
   private processConnections(
     point: Point,
-    connections: Map<Point, Set<Point>>
+    connections: Map<Point, Set<Point>>,
   ) {
     connections.set(point, new Set());
 
@@ -111,7 +111,7 @@ export class Simulator {
 
       const distance = point.distance(other);
       if (distance < CONNECT_DISTANCE) {
-        connections.get(point).add(other);
+        connections.get(point)!.add(other);
       }
     }
   }
@@ -126,7 +126,7 @@ export class Simulator {
     ctx.lineTo(other.x, other.y);
 
     ctx.strokeStyle = `rgba(255, 255, 255, ${Math.abs(
-      distance / CONNECT_DISTANCE - 1
+      distance / CONNECT_DISTANCE - 1,
     )})`;
     ctx.stroke();
   }

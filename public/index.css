@@ -1,0 +1,44 @@
+html,
+body {
+  margin: 0px;
+  padding: 0px;
+}
+
+#viewport {
+  overflow: hidden;
+  position: relative;
+
+  width: 100vw;
+  height: 100vh;
+
+  background-color: black;
+}
+
+#canvas {
+  position: absolute;
+
+  top: 50%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-50%);
+}
+
+#madeby {
+  display: flex;
+  position: absolute;
+  bottom: 0.25rem;
+  right: 0.25rem;
+  background-color: white;
+  border-radius: 50%;
+  padding: 0.25rem;
+  opacity: 0.9;
+  transition: opacity ease 200ms;
+}
+
+#madeby:hover {
+  opacity: 1;
+}
+
+#madeby img {
+  width: 2.5rem;
+  height: 2.5rem;
+}
