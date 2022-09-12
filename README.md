@@ -2,7 +2,7 @@
 
 ![Animation](https://miro.medium.com/max/1400/1*a4tiXdRcOxYEQn-SyV6Jcw.png)
 
-Live demo available [here](https://vdeantoni.github.io/proximity-graph-animation/)
+Live demo available [here](https://proximity-graph-animation.netlify.app/)
 
 #
 
