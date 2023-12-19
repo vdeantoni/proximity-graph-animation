@@ -19,9 +19,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "lodash": "latest"
+    "lodash": "^4.17.21"
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.202",
     "typescript": "^5.2.2",
     "vite": "^5.0.8"
   }
