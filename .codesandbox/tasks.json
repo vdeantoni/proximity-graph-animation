@@ -12,17 +12,18 @@
     "start": {
       "name": "dev",
       "command": "pnpm run dev",
-      "runAtStart": true
+      "runAtStart": true,
+      "preview": {
+        "port": 5173
+      }
     },
     "build": {
       "name": "build",
-      "command": "pnpm run build",
-      "runAtStart": false
+      "command": "pnpm run build"
     },
     "test": {
       "name": "preview",
-      "command": "pnpm run preview",
-      "runAtStart": false
+      "command": "pnpm run preview"
     }
   }
 }
