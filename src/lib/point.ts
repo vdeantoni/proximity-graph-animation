@@ -1,5 +1,8 @@
-import { random } from "lodash";
-import { MAX_SPEED, MAX_RADIUS, MIN_RADIUS } from "./constants";
+import { MAX_SPEED, MAX_RADIUS, MIN_RADIUS } from './constants';
+
+function random(min: number, max: number) {
+  return Math.random() * (max - min) + min;
+}
 
 export class Point {
   constructor(
@@ -8,7 +11,7 @@ export class Point {
     private vx: number,
     private vy: number,
     public radius: number,
-    public color: string
+    public color: string,
   ) {}
 
   public move = (delta: number) => {
@@ -27,7 +30,7 @@ export class Point {
       random(-MAX_SPEED, MAX_SPEED),
       random(-MAX_SPEED, MAX_SPEED),
       random(MIN_RADIUS, MAX_RADIUS),
-      "white"
+      'white',
     );
   }
 }
