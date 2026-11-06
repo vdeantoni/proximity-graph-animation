@@ -1,4 +1,4 @@
-import { CONNECT_DISTANCE, DENSITY, FPS } from './constants';
+import { CONNECT_DISTANCE, DENSITY, FPS, LINE_WIDTH } from './constants';
 import { Point } from './point';
 
 const TIME_PER_FRAME = 1000 / FPS;
@@ -31,7 +31,12 @@ function cellIndex(value: number, count: number) {
 
 function addConnection(paths: Path2D[], point: Point, other: Point) {
   const distance = point.distance(other);
-  const level = Math.round((1 - distance / CONNECT_DISTANCE) * ALPHA_LEVELS);
+  if (distance >= CONNECT_DISTANCE) {
+    return;
+  }
+
+  const closeness = 1 - distance / CONNECT_DISTANCE;
+  const level = Math.round(closeness * closeness * ALPHA_LEVELS);
   if (level > 0) {
     paths[level].moveTo(point.x, point.y);
     paths[level].lineTo(other.x, other.y);
@@ -49,6 +54,7 @@ export class Simulator {
   private width = 0;
   private height = 0;
   private dpr = 0;
+  private background: CanvasGradient | string = 'black';
 
   constructor(private canvas: HTMLCanvasElement, { density = DENSITY } = {}) {
     this.ctx = canvas.getContext('2d')!;
@@ -70,6 +76,21 @@ export class Simulator {
     this.canvas.width = Math.round(width * dpr);
     this.canvas.height = Math.round(height * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.lineWidth = Math.max(LINE_WIDTH, 1 / dpr);
+
+    const cx = width / 2;
+    const cy = height / 2;
+    const background = this.ctx.createRadialGradient(
+      cx,
+      cy,
+      0,
+      cx,
+      cy,
+      Math.hypot(cx, cy),
+    );
+    background.addColorStop(0, '#0b1226');
+    background.addColorStop(1, '#000');
+    this.background = background;
 
     const margin = CONNECT_DISTANCE;
     const scaleX = (width + 2 * margin) / (this.width + 2 * margin);
@@ -103,6 +124,9 @@ export class Simulator {
 
     this.fit();
 
+    this.ctx.globalCompositeOperation = 'source-over';
+    // drawPoint leaves globalAlpha at the last point's value
+    this.ctx.globalAlpha = 1;
     this.drawBackground();
 
     this.points.forEach((point) => {
@@ -111,6 +135,7 @@ export class Simulator {
       point.y = wrap(point.y, this.height);
     });
 
+    this.ctx.globalCompositeOperation = 'lighter';
     this.drawConnections();
 
     this.points.forEach((point) => {
@@ -123,13 +148,14 @@ export class Simulator {
   };
 
   private drawBackground() {
-    this.ctx.fillStyle = 'black';
+    this.ctx.fillStyle = this.background;
     this.ctx.fillRect(0, 0, this.width, this.height);
   }
 
   private drawPoint(point: Point) {
     const ctx = this.ctx;
     ctx.fillStyle = point.color;
+    ctx.globalAlpha = point.alpha;
     ctx.beginPath();
     ctx.arc(point.x, point.y, point.radius, 0, 2 * Math.PI);
     ctx.fill();

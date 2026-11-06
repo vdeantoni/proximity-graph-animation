@@ -12,6 +12,7 @@ export class Point {
     private vy: number,
     public radius: number,
     public color: string,
+    public alpha: number,
   ) {}
 
   public move(delta: number) {
@@ -27,13 +28,15 @@ export class Point {
     const angle = random(0, 2 * Math.PI);
     // sqrt spreads velocities evenly over the disk instead of bunching slow ones
     const speed = MAX_SPEED * Math.sqrt(Math.random());
+    const radius = random(MIN_RADIUS, MAX_RADIUS);
     return new Point(
       random(minX, maxX),
       random(minY, maxY),
       speed * Math.cos(angle),
       speed * Math.sin(angle),
-      random(MIN_RADIUS, MAX_RADIUS),
+      radius,
       'white',
+      radius / MAX_RADIUS,
     );
   }
 }
