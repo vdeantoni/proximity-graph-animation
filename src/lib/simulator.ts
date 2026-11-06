@@ -1,3 +1,4 @@
+import Delaunator from 'delaunator';
 import { FPS, type Settings } from './settings';
 import { Point } from './point';
 
@@ -44,6 +45,15 @@ interface TriangleFade {
   frame: number;
 }
 
+type TriangleVisitor = (
+  a: number,
+  b: number,
+  c: number,
+  ab: number,
+  bc: number,
+  ac: number,
+) => void;
+
 // Point indices stay below 2^17, so a triangle's three pack exactly into a key
 const INDEX_LIMIT = 2 ** 17;
 
@@ -54,6 +64,8 @@ export class Simulator {
   // links[a] holds [b, level, b, level, ...] for each connection to a later b
   private links: number[][] = [];
   private fades = new Map<number, TriangleFade>();
+  private coords = new Float64Array(0);
+  private delaunay?: Delaunator<Float64Array>;
   private frame = 0;
   private cols = 0;
   private rows = 0;
@@ -213,7 +225,9 @@ export class Simulator {
 
   private drawConnections(delta: number) {
     const { ctx, cells, cols, rows, connectDistance, points, links } = this;
-    const { fade, lineColor, lineWidth, triangles } = this.settings;
+    const { fade, lineColor, lineWidth, triangles, triangleStyle } =
+      this.settings;
+    const recordLinks = triangles && triangleStyle === 'overlapping';
 
     cells.forEach((cell) => {
       cell.length = 0;
@@ -224,7 +238,7 @@ export class Simulator {
       cells[row * cols + col].push(index);
     });
 
-    if (triangles) {
+    if (recordLinks) {
       while (links.length < points.length) {
         links.push([]);
       }
@@ -241,7 +255,7 @@ export class Simulator {
       if (level > 0) {
         paths[level].moveTo(point.x, point.y);
         paths[level].lineTo(other.x, other.y);
-        if (triangles) {
+        if (recordLinks) {
           links[Math.min(a, b)].push(Math.max(a, b), level);
         }
       }
@@ -288,11 +302,12 @@ export class Simulator {
   }
 
   private fillTriangles(delta: number) {
-    const { ctx, points, links, fades } = this;
+    const { ctx, points, fades } = this;
     const {
       triangleColor,
       triangleOpacity,
       triangleShade,
+      triangleStyle,
       triangleTransition,
     } = this.settings;
     const frame = ++this.frame;
@@ -302,40 +317,22 @@ export class Simulator {
         ? 1 - Math.exp((-3 * delta * TIME_PER_FRAME) / triangleTransition)
         : 1;
 
-    // Each triangle is found once, from its lowest index a through b < c
-    for (let a = 0; a < points.length; a++) {
-      const linksA = links[a];
-      for (let i = 0; i < linksA.length; i += 2) {
-        const b = linksA[i];
-        const linksB = links[b];
-        for (let j = 0; j < linksB.length; j += 2) {
-          const c = linksB[j];
-          let k = 0;
-          while (k < linksA.length && linksA[k] !== c) {
-            k += 2;
-          }
-          if (k === linksA.length) {
-            continue;
-          }
-
-          const ab = linksA[i + 1];
-          const bc = linksB[j + 1];
-          const ac = linksA[k + 1];
-          const level =
-            triangleShade === 'weakest'
-              ? Math.min(ab, bc, ac)
-              : (ab + bc + ac) / 3;
-
-          const key = (a * INDEX_LIMIT + b) * INDEX_LIMIT + c;
-          let fade = fades.get(key);
-          if (!fade) {
-            fade = { a, b, c, opacity: 0, frame };
-            fades.set(key, fade);
-          }
-          fade.frame = frame;
-          fade.opacity += (level / ALPHA_LEVELS - fade.opacity) * ease;
-        }
+    const show: TriangleVisitor = (a, b, c, ab, bc, ac) => {
+      const level =
+        triangleShade === 'weakest' ? Math.min(ab, bc, ac) : (ab + bc + ac) / 3;
+      const key = (a * INDEX_LIMIT + b) * INDEX_LIMIT + c;
+      let fade = fades.get(key);
+      if (!fade) {
+        fade = { a, b, c, opacity: 0, frame };
+        fades.set(key, fade);
       }
+      fade.frame = frame;
+      fade.opacity += (level / ALPHA_LEVELS - fade.opacity) * ease;
+    };
+    if (triangleStyle === 'mosaic') {
+      this.findMosaicTriangles(show);
+    } else {
+      this.findOverlappingTriangles(show);
     }
 
     const maxEdge = 2 * this.connectDistance;
@@ -371,5 +368,67 @@ export class Simulator {
       ctx.lineTo(r.x, r.y);
       ctx.fill();
     });
+  }
+
+  // Every mutually connected triple, found once from its lowest index a via b < c
+  private findOverlappingTriangles(show: TriangleVisitor) {
+    const { points, links } = this;
+
+    for (let a = 0; a < points.length; a++) {
+      const linksA = links[a];
+      for (let i = 0; i < linksA.length; i += 2) {
+        const b = linksA[i];
+        const linksB = links[b];
+        for (let j = 0; j < linksB.length; j += 2) {
+          const c = linksB[j];
+          let k = 0;
+          while (k < linksA.length && linksA[k] !== c) {
+            k += 2;
+          }
+          if (k < linksA.length) {
+            show(a, b, c, linksA[i + 1], linksB[j + 1], linksA[k + 1]);
+          }
+        }
+      }
+    }
+  }
+
+  // Delaunay triangles whose edges are all connections. They never overlap and
+  // number at most two per point, however dense the graph gets.
+  private findMosaicTriangles(show: TriangleVisitor) {
+    const { points, connectDistance } = this;
+    const { fade } = this.settings;
+
+    if (this.coords.length !== 2 * points.length) {
+      this.coords = new Float64Array(2 * points.length);
+      this.delaunay = undefined;
+    }
+    const coords = this.coords;
+    points.forEach((point, i) => {
+      coords[2 * i] = point.x;
+      coords[2 * i + 1] = point.y;
+    });
+    if (this.delaunay) {
+      this.delaunay.update();
+    } else {
+      this.delaunay = new Delaunator(coords);
+    }
+
+    const { triangles } = this.delaunay;
+    for (let t = 0; t < triangles.length; t += 3) {
+      let a = triangles[t];
+      let b = triangles[t + 1];
+      let c = triangles[t + 2];
+      if (a > b) [a, b] = [b, a];
+      if (b > c) [b, c] = [c, b];
+      if (a > b) [a, b] = [b, a];
+
+      const ab = connectionLevel(points[a], points[b], connectDistance, fade);
+      const bc = connectionLevel(points[b], points[c], connectDistance, fade);
+      const ac = connectionLevel(points[a], points[c], connectDistance, fade);
+      if (ab > 0 && bc > 0 && ac > 0) {
+        show(a, b, c, ab, bc, ac);
+      }
+    }
   }
 }

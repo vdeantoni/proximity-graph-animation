@@ -3,6 +3,9 @@ export const FPS = 60;
 export const TRIANGLE_SHADES = ['weakest', 'average'] as const;
 export type TriangleShade = (typeof TRIANGLE_SHADES)[number];
 
+export const TRIANGLE_STYLES = ['mosaic', 'overlapping'] as const;
+export type TriangleStyle = (typeof TRIANGLE_STYLES)[number];
+
 export const DEFAULT_SETTINGS = {
   paused: false,
   density: 1,
@@ -16,6 +19,7 @@ export const DEFAULT_SETTINGS = {
   lineColor: '#ffffff',
   additive: true,
   triangles: false,
+  triangleStyle: 'mosaic' as TriangleStyle,
   triangleShade: 'weakest' as TriangleShade,
   triangleColor: '#4d7cff',
   triangleOpacity: 0.3,
@@ -88,6 +92,10 @@ export function loadSettings(): Settings {
   const shade = TRIANGLE_SHADES.find((name) => name === values.triangleShade);
   if (shade) {
     settings.triangleShade = shade;
+  }
+  const style = TRIANGLE_STYLES.find((name) => name === values.triangleStyle);
+  if (style) {
+    settings.triangleStyle = style;
   }
 
   return settings;

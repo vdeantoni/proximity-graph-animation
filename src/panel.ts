@@ -56,6 +56,13 @@ export function createPanel(settings: Settings, simulator: Simulator) {
 
   const triangles = pane.addFolder({ title: 'Triangles' });
   triangles.addBinding(settings, 'triangles', { label: 'fill' });
+  triangles.addBinding(settings, 'triangleStyle', {
+    label: 'style',
+    options: {
+      mosaic: 'mosaic',
+      'overlapping (slow when dense)': 'overlapping',
+    },
+  });
   triangles.addBinding(settings, 'triangleShade', {
     label: 'shade by',
     options: { 'weakest edge': 'weakest', 'average edge': 'average' },

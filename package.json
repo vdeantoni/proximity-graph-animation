@@ -24,6 +24,7 @@
     "vite": "^8.3.6"
   },
   "dependencies": {
+    "delaunator": "^5.1.0",
     "tweakpane": "^4.0.5"
   }
 }
