@@ -19,6 +19,7 @@ export const DEFAULT_SETTINGS = {
   triangleShade: 'weakest' as TriangleShade,
   triangleColor: '#4d7cff',
   triangleOpacity: 0.3,
+  triangleTransition: 400,
   backgroundInner: '#0b1226',
   backgroundOuter: '#000000',
 };
@@ -34,6 +35,7 @@ export const RANGES = {
   fade: { min: 0.5, max: 4, step: 0.1 },
   lineWidth: { min: 0.25, max: 3, step: 0.05 },
   triangleOpacity: { min: 0, max: 1, step: 0.01 },
+  triangleTransition: { min: 0, max: 2000, step: 50 },
 } satisfies Partial<
   Record<keyof Settings, { min: number; max: number; step: number }>
 >;

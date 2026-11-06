@@ -36,9 +36,16 @@ function connectionLevel(
   return Math.round((1 - distance / maxDistance) ** fade * ALPHA_LEVELS);
 }
 
-function createPaths() {
-  return Array.from({ length: ALPHA_LEVELS + 1 }, () => new Path2D());
+interface TriangleFade {
+  a: number;
+  b: number;
+  c: number;
+  opacity: number;
+  frame: number;
 }
+
+// Point indices stay below 2^17, so a triangle's three pack exactly into a key
+const INDEX_LIMIT = 2 ** 17;
 
 export class Simulator {
   private ctx: CanvasRenderingContext2D;
@@ -46,6 +53,8 @@ export class Simulator {
   private cells: number[][] = [];
   // links[a] holds [b, level, b, level, ...] for each connection to a later b
   private links: number[][] = [];
+  private fades = new Map<number, TriangleFade>();
+  private frame = 0;
   private cols = 0;
   private rows = 0;
   private last: number = 0;
@@ -70,6 +79,7 @@ export class Simulator {
 
   public randomize() {
     this.points.length = 0;
+    this.fades.clear();
     this.populate();
   }
 
@@ -152,7 +162,7 @@ export class Simulator {
     ctx.globalCompositeOperation = settings.additive
       ? 'lighter'
       : 'source-over';
-    this.drawConnections();
+    this.drawConnections(delta);
     this.drawPoints();
 
     this.last = timestamp;
@@ -201,7 +211,7 @@ export class Simulator {
     });
   }
 
-  private drawConnections() {
+  private drawConnections(delta: number) {
     const { ctx, cells, cols, rows, connectDistance, points, links } = this;
     const { fade, lineColor, lineWidth, triangles } = this.settings;
 
@@ -223,7 +233,7 @@ export class Simulator {
       });
     }
 
-    const paths = createPaths();
+    const paths = Array.from({ length: ALPHA_LEVELS + 1 }, () => new Path2D());
     const connect = (a: number, b: number) => {
       const point = points[a];
       const other = points[b];
@@ -264,7 +274,9 @@ export class Simulator {
     }
 
     if (triangles) {
-      this.fillTriangles();
+      this.fillTriangles(delta);
+    } else {
+      this.fades.clear();
     }
 
     ctx.strokeStyle = lineColor;
@@ -275,10 +287,20 @@ export class Simulator {
     }
   }
 
-  private fillTriangles() {
-    const { ctx, points, links } = this;
-    const { triangleColor, triangleOpacity, triangleShade } = this.settings;
-    const paths = createPaths();
+  private fillTriangles(delta: number) {
+    const { ctx, points, links, fades } = this;
+    const {
+      triangleColor,
+      triangleOpacity,
+      triangleShade,
+      triangleTransition,
+    } = this.settings;
+    const frame = ++this.frame;
+    // Exponential easing that covers about 95% of the way in triangleTransition ms
+    const ease =
+      triangleTransition > 0
+        ? 1 - Math.exp((-3 * delta * TIME_PER_FRAME) / triangleTransition)
+        : 1;
 
     // Each triangle is found once, from its lowest index a through b < c
     for (let a = 0; a < points.length; a++) {
@@ -302,28 +324,52 @@ export class Simulator {
           const level =
             triangleShade === 'weakest'
               ? Math.min(ab, bc, ac)
-              : Math.round((ab + bc + ac) / 3);
+              : (ab + bc + ac) / 3;
 
-          const p = points[a];
-          let q = points[b];
-          let r = points[c];
-          // Overlapping triangles cancel out under the nonzero fill rule unless
-          // they all wind the same way
-          if ((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x) < 0) {
-            [q, r] = [r, q];
+          const key = (a * INDEX_LIMIT + b) * INDEX_LIMIT + c;
+          let fade = fades.get(key);
+          if (!fade) {
+            fade = { a, b, c, opacity: 0, frame };
+            fades.set(key, fade);
           }
-          paths[level].moveTo(p.x, p.y);
-          paths[level].lineTo(q.x, q.y);
-          paths[level].lineTo(r.x, r.y);
-          paths[level].closePath();
+          fade.frame = frame;
+          fade.opacity += (level / ALPHA_LEVELS - fade.opacity) * ease;
         }
       }
     }
 
+    const maxEdge = 2 * this.connectDistance;
     ctx.fillStyle = triangleColor;
-    for (let level = 1; level <= ALPHA_LEVELS; level++) {
-      ctx.globalAlpha = (level / ALPHA_LEVELS) * triangleOpacity;
-      ctx.fill(paths[level]);
-    }
+    // One fill per triangle, so overlaps always add up the same way
+    fades.forEach((fade, key) => {
+      if (fade.frame !== frame && fade.c >= points.length) {
+        fades.delete(key);
+        return;
+      }
+
+      const p = points[fade.a];
+      const q = points[fade.b];
+      const r = points[fade.c];
+      if (fade.frame !== frame) {
+        fade.opacity -= fade.opacity * ease;
+        // A vertex that wrapped to the far side would stretch it across the screen
+        if (
+          fade.opacity < 0.002 ||
+          p.distance(q) > maxEdge ||
+          q.distance(r) > maxEdge ||
+          p.distance(r) > maxEdge
+        ) {
+          fades.delete(key);
+          return;
+        }
+      }
+
+      ctx.globalAlpha = fade.opacity * triangleOpacity;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(q.x, q.y);
+      ctx.lineTo(r.x, r.y);
+      ctx.fill();
+    });
   }
 }

@@ -65,6 +65,10 @@ export function createPanel(settings: Settings, simulator: Simulator) {
     ...RANGES.triangleOpacity,
     label: 'opacity',
   });
+  triangles.addBinding(settings, 'triangleTransition', {
+    ...RANGES.triangleTransition,
+    label: 'transition ms',
+  });
 
   const background = pane.addFolder({ title: 'Background' });
   background.addBinding(settings, 'backgroundInner', { label: 'center' });
