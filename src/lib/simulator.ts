@@ -3,14 +3,23 @@ import { Point } from './point';
 
 const TIME_PER_FRAME = 1000 / FPS;
 
+function wrap(value: number, size: number) {
+  const span = size + 2 * CONNECT_DISTANCE;
+  return (
+    ((((value + CONNECT_DISTANCE) % span) + span) % span) - CONNECT_DISTANCE
+  );
+}
+
 export class Simulator {
-  private population: number;
+  private density: number;
   private points: Point[] = [];
   private last: number = 0;
+  private width = 0;
+  private height = 0;
+  private dpr = 0;
 
   constructor(private canvas: HTMLCanvasElement, { density = DENSITY } = {}) {
-    this.population =
-      (this.canvas.width * this.canvas.height) / (5000 / density);
+    this.density = density;
   }
 
   private getContext() {
@@ -21,33 +30,56 @@ export class Simulator {
     window.requestAnimationFrame(this.loop);
   };
 
+  private fit() {
+    const width = this.canvas.clientWidth;
+    const height = this.canvas.clientHeight;
+    const dpr = window.devicePixelRatio;
+    if (width === this.width && height === this.height && dpr === this.dpr) {
+      return;
+    }
+
+    this.canvas.width = Math.round(width * dpr);
+    this.canvas.height = Math.round(height * dpr);
+    this.getContext().setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const margin = CONNECT_DISTANCE;
+    const scaleX = (width + 2 * margin) / (this.width + 2 * margin);
+    const scaleY = (height + 2 * margin) / (this.height + 2 * margin);
+    this.points.forEach((point) => {
+      point.x = (point.x + margin) * scaleX - margin;
+      point.y = (point.y + margin) * scaleY - margin;
+    });
+
+    this.width = width;
+    this.height = height;
+    this.dpr = dpr;
+
+    const population = Math.round(
+      ((width + 2 * margin) * (height + 2 * margin)) / (5000 / this.density),
+    );
+    this.points.length = Math.min(this.points.length, population);
+    while (this.points.length < population) {
+      this.points.push(
+        Point.create(-margin, -margin, width + margin, height + margin),
+      );
+    }
+  }
+
   private loop = (timestamp: number) => {
     const delta = !this.last ? 1 : (timestamp - this.last) / TIME_PER_FRAME;
 
-    for (let i = this.points.length; i < this.population; i++) {
-      this.points.push(Point.create(this.canvas.width, this.canvas.height));
-    }
+    this.fit();
 
     const ctx = this.getContext();
 
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.clearRect(0, 0, this.width, this.height);
 
     this.drawBackground();
 
     this.points.forEach((point) => {
       point.move(delta);
-
-      if (point.x < -CONNECT_DISTANCE) {
-        point.x = this.canvas.width + CONNECT_DISTANCE;
-      } else if (point.x > this.canvas.width + CONNECT_DISTANCE) {
-        point.x = -CONNECT_DISTANCE;
-      }
-
-      if (point.y < -CONNECT_DISTANCE) {
-        point.y = this.canvas.height + CONNECT_DISTANCE;
-      } else if (point.y > this.canvas.height + CONNECT_DISTANCE) {
-        point.y = -CONNECT_DISTANCE;
-      }
+      point.x = wrap(point.x, this.width);
+      point.y = wrap(point.y, this.height);
     });
 
     const connections = new Map<Point, Set<Point>>();
@@ -73,7 +105,7 @@ export class Simulator {
   private drawBackground() {
     const ctx = this.getContext();
     ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.fillRect(0, 0, this.width, this.height);
   }
 
   private drawPoint(point: Point) {
@@ -101,10 +133,10 @@ export class Simulator {
       const chb = point.y + CONNECT_DISTANCE;
 
       if (
-        (cwr < this.canvas.width && other.x > cwr) ||
+        (cwr < this.width && other.x > cwr) ||
         (cwl >= 0 && other.x < cwl) ||
         (cht >= 0 && other.y < cht) ||
-        (chb < this.canvas.height && other.y > chb)
+        (chb < this.height && other.y > chb)
       ) {
         continue;
       }

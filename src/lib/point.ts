@@ -23,12 +23,15 @@ export class Point {
     return Math.sqrt((other.x - this.x) ** 2 + (other.y - this.y) ** 2);
   };
 
-  public static create(w: number, h: number) {
+  public static create(minX: number, minY: number, maxX: number, maxY: number) {
+    const angle = random(0, 2 * Math.PI);
+    // sqrt spreads velocities evenly over the disk instead of bunching slow ones
+    const speed = MAX_SPEED * Math.sqrt(Math.random());
     return new Point(
-      random(0, w),
-      random(0, h),
-      random(-MAX_SPEED, MAX_SPEED),
-      random(-MAX_SPEED, MAX_SPEED),
+      random(minX, maxX),
+      random(minY, maxY),
+      speed * Math.cos(angle),
+      speed * Math.sin(angle),
       random(MIN_RADIUS, MAX_RADIUS),
       'white',
     );
