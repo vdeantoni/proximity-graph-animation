@@ -2,6 +2,19 @@ import { CONNECT_DISTANCE, DENSITY, FPS } from './constants';
 import { Point } from './point';
 
 const TIME_PER_FRAME = 1000 / FPS;
+const ALPHA_LEVELS = 32;
+const STROKE_STYLES = Array.from(
+  { length: ALPHA_LEVELS + 1 },
+  (_, level) => `rgba(255, 255, 255, ${level / ALPHA_LEVELS})`,
+);
+// Cells are CONNECT_DISTANCE wide, so connected points share a cell or touch.
+// Only half the neighbors are listed so each pair of cells is visited once.
+const NEIGHBORS = [
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+];
 
 function wrap(value: number, size: number) {
   const span = size + 2 * CONNECT_DISTANCE;
@@ -10,10 +23,28 @@ function wrap(value: number, size: number) {
   );
 }
 
+// Float rounding in wrap() can land a point just outside the grid
+function cellIndex(value: number, count: number) {
+  const index = Math.floor(value / CONNECT_DISTANCE) + 1;
+  return Math.min(count - 1, Math.max(0, index));
+}
+
+function addConnection(paths: Path2D[], point: Point, other: Point) {
+  const distance = point.distance(other);
+  const level = Math.round((1 - distance / CONNECT_DISTANCE) * ALPHA_LEVELS);
+  if (level > 0) {
+    paths[level].moveTo(point.x, point.y);
+    paths[level].lineTo(other.x, other.y);
+  }
+}
+
 export class Simulator {
   private ctx: CanvasRenderingContext2D;
   private density: number;
   private points: Point[] = [];
+  private cells: Point[][] = [];
+  private cols = 0;
+  private rows = 0;
   private last: number = 0;
   private width = 0;
   private height = 0;
@@ -51,6 +82,10 @@ export class Simulator {
     this.width = width;
     this.height = height;
     this.dpr = dpr;
+
+    this.cols = Math.ceil((width + 2 * margin) / CONNECT_DISTANCE);
+    this.rows = Math.ceil((height + 2 * margin) / CONNECT_DISTANCE);
+    this.cells = Array.from({ length: this.cols * this.rows }, () => []);
 
     const population = Math.round(
       ((width + 2 * margin) * (height + 2 * margin)) / (5000 / this.density),
@@ -101,32 +136,48 @@ export class Simulator {
   }
 
   private drawConnections() {
-    const { ctx, points } = this;
+    const { ctx, cells, cols, rows } = this;
 
-    for (let i = 0; i < points.length; i++) {
-      const point = points[i];
+    cells.forEach((cell) => {
+      cell.length = 0;
+    });
+    this.points.forEach((point) => {
+      cells[cellIndex(point.y, rows) * cols + cellIndex(point.x, cols)].push(
+        point,
+      );
+    });
 
-      for (let j = i + 1; j < points.length; j++) {
-        const other = points[j];
+    const paths = STROKE_STYLES.map(() => new Path2D());
 
-        if (
-          Math.abs(other.x - point.x) >= CONNECT_DISTANCE ||
-          Math.abs(other.y - point.y) >= CONNECT_DISTANCE
-        ) {
-          continue;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const cell = cells[row * cols + col];
+
+        for (let i = 0; i < cell.length; i++) {
+          for (let j = i + 1; j < cell.length; j++) {
+            addConnection(paths, cell[i], cell[j]);
+          }
         }
 
-        const distance = point.distance(other);
-        if (distance >= CONNECT_DISTANCE) {
-          continue;
-        }
+        for (const [dc, dr] of NEIGHBORS) {
+          const c = col + dc;
+          const r = row + dr;
+          if (c < 0 || c >= cols || r >= rows) {
+            continue;
+          }
 
-        ctx.beginPath();
-        ctx.moveTo(point.x, point.y);
-        ctx.lineTo(other.x, other.y);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${1 - distance / CONNECT_DISTANCE})`;
-        ctx.stroke();
+          for (const point of cell) {
+            for (const other of cells[r * cols + c]) {
+              addConnection(paths, point, other);
+            }
+          }
+        }
       }
+    }
+
+    for (let level = 1; level <= ALPHA_LEVELS; level++) {
+      ctx.strokeStyle = STROKE_STYLES[level];
+      ctx.stroke(paths[level]);
     }
   }
 }
