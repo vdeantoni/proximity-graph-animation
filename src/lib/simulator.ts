@@ -1,14 +1,10 @@
-import { CONNECT_DISTANCE, DENSITY, FPS, LINE_WIDTH } from './constants';
+import { FPS, type Settings } from './settings';
 import { Point } from './point';
 
 const TIME_PER_FRAME = 1000 / FPS;
 const ALPHA_LEVELS = 32;
-const STROKE_STYLES = Array.from(
-  { length: ALPHA_LEVELS + 1 },
-  (_, level) => `rgba(255, 255, 255, ${level / ALPHA_LEVELS})`,
-);
-// Cells are CONNECT_DISTANCE wide, so connected points share a cell or touch.
-// Only half the neighbors are listed so each pair of cells is visited once.
+// Cells are as wide as the connect distance, so connected points share a cell
+// or touch. Only half the neighbors are listed so each cell pair is visited once.
 const NEIGHBORS = [
   [1, 0],
   [-1, 1],
@@ -16,27 +12,30 @@ const NEIGHBORS = [
   [1, 1],
 ];
 
-function wrap(value: number, size: number) {
-  const span = size + 2 * CONNECT_DISTANCE;
-  return (
-    ((((value + CONNECT_DISTANCE) % span) + span) % span) - CONNECT_DISTANCE
-  );
+function wrap(value: number, size: number, margin: number) {
+  const span = size + 2 * margin;
+  return ((((value + margin) % span) + span) % span) - margin;
 }
 
 // Float rounding in wrap() can land a point just outside the grid
-function cellIndex(value: number, count: number) {
-  const index = Math.floor(value / CONNECT_DISTANCE) + 1;
+function cellIndex(value: number, count: number, cellSize: number) {
+  const index = Math.floor(value / cellSize) + 1;
   return Math.min(count - 1, Math.max(0, index));
 }
 
-function addConnection(paths: Path2D[], point: Point, other: Point) {
+function addConnection(
+  paths: Path2D[],
+  point: Point,
+  other: Point,
+  maxDistance: number,
+  fade: number,
+) {
   const distance = point.distance(other);
-  if (distance >= CONNECT_DISTANCE) {
+  if (distance >= maxDistance) {
     return;
   }
 
-  const closeness = 1 - distance / CONNECT_DISTANCE;
-  const level = Math.round(closeness * closeness * ALPHA_LEVELS);
+  const level = Math.round((1 - distance / maxDistance) ** fade * ALPHA_LEVELS);
   if (level > 0) {
     paths[level].moveTo(point.x, point.y);
     paths[level].lineTo(other.x, other.y);
@@ -45,7 +44,6 @@ function addConnection(paths: Path2D[], point: Point, other: Point) {
 
 export class Simulator {
   private ctx: CanvasRenderingContext2D;
-  private density: number;
   private points: Point[] = [];
   private cells: Point[][] = [];
   private cols = 0;
@@ -54,62 +52,74 @@ export class Simulator {
   private width = 0;
   private height = 0;
   private dpr = 0;
+  private connectDistance = 0;
+  private density = 0;
   private background: CanvasGradient | string = 'black';
+  private backgroundKey = '';
 
-  constructor(private canvas: HTMLCanvasElement, { density = DENSITY } = {}) {
+  constructor(
+    private canvas: HTMLCanvasElement,
+    private settings: Settings,
+  ) {
     this.ctx = canvas.getContext('2d')!;
-    this.density = density;
   }
 
   public start = () => {
     window.requestAnimationFrame(this.loop);
   };
 
+  public randomize() {
+    this.points.length = 0;
+    this.populate();
+  }
+
   private fit() {
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
     const dpr = window.devicePixelRatio;
-    if (width === this.width && height === this.height && dpr === this.dpr) {
+    const { connectDistance, density } = this.settings;
+    const resized =
+      width !== this.width || height !== this.height || dpr !== this.dpr;
+    if (
+      !resized &&
+      connectDistance === this.connectDistance &&
+      density === this.density
+    ) {
       return;
     }
 
-    this.canvas.width = Math.round(width * dpr);
-    this.canvas.height = Math.round(height * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.ctx.lineWidth = Math.max(LINE_WIDTH, 1 / dpr);
+    if (resized) {
+      this.canvas.width = Math.round(width * dpr);
+      this.canvas.height = Math.round(height * dpr);
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
 
-    const cx = width / 2;
-    const cy = height / 2;
-    const background = this.ctx.createRadialGradient(
-      cx,
-      cy,
-      0,
-      cx,
-      cy,
-      Math.hypot(cx, cy),
-    );
-    background.addColorStop(0, '#0b1226');
-    background.addColorStop(1, '#000');
-    this.background = background;
-
-    const margin = CONNECT_DISTANCE;
-    const scaleX = (width + 2 * margin) / (this.width + 2 * margin);
-    const scaleY = (height + 2 * margin) / (this.height + 2 * margin);
+    const oldMargin = this.connectDistance;
+    const margin = connectDistance;
+    const scaleX = (width + 2 * margin) / (this.width + 2 * oldMargin);
+    const scaleY = (height + 2 * margin) / (this.height + 2 * oldMargin);
     this.points.forEach((point) => {
-      point.x = (point.x + margin) * scaleX - margin;
-      point.y = (point.y + margin) * scaleY - margin;
+      point.x = (point.x + oldMargin) * scaleX - margin;
+      point.y = (point.y + oldMargin) * scaleY - margin;
     });
 
     this.width = width;
     this.height = height;
     this.dpr = dpr;
+    this.connectDistance = connectDistance;
+    this.density = density;
 
-    this.cols = Math.ceil((width + 2 * margin) / CONNECT_DISTANCE);
-    this.rows = Math.ceil((height + 2 * margin) / CONNECT_DISTANCE);
+    this.cols = Math.ceil((width + 2 * margin) / connectDistance);
+    this.rows = Math.ceil((height + 2 * margin) / connectDistance);
     this.cells = Array.from({ length: this.cols * this.rows }, () => []);
 
+    this.populate();
+  }
+
+  private populate() {
+    const { width, height, connectDistance: margin, density } = this;
     const population = Math.round(
-      ((width + 2 * margin) * (height + 2 * margin)) / (5000 / this.density),
+      ((width + 2 * margin) * (height + 2 * margin)) / (5000 / density),
     );
     this.points.length = Math.min(this.points.length, population);
     while (this.points.length < population) {
@@ -121,26 +131,29 @@ export class Simulator {
 
   private loop = (timestamp: number) => {
     const delta = !this.last ? 1 : (timestamp - this.last) / TIME_PER_FRAME;
+    const { ctx, settings } = this;
 
     this.fit();
 
-    this.ctx.globalCompositeOperation = 'source-over';
-    // drawPoint leaves globalAlpha at the last point's value
-    this.ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    // Connections and points leave globalAlpha below 1
+    ctx.globalAlpha = 1;
     this.drawBackground();
 
-    this.points.forEach((point) => {
-      point.move(delta);
-      point.x = wrap(point.x, this.width);
-      point.y = wrap(point.y, this.height);
-    });
+    if (!settings.paused) {
+      const step = delta * settings.maxSpeed;
+      this.points.forEach((point) => {
+        point.move(step);
+        point.x = wrap(point.x, this.width, this.connectDistance);
+        point.y = wrap(point.y, this.height, this.connectDistance);
+      });
+    }
 
-    this.ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = settings.additive
+      ? 'lighter'
+      : 'source-over';
     this.drawConnections();
-
-    this.points.forEach((point) => {
-      this.drawPoint(point);
-    });
+    this.drawPoints();
 
     this.last = timestamp;
 
@@ -148,32 +161,60 @@ export class Simulator {
   };
 
   private drawBackground() {
-    this.ctx.fillStyle = this.background;
-    this.ctx.fillRect(0, 0, this.width, this.height);
+    const { ctx, width, height } = this;
+    const { backgroundInner, backgroundOuter } = this.settings;
+
+    const key = `${width}x${height} ${backgroundInner} ${backgroundOuter}`;
+    if (key !== this.backgroundKey) {
+      const cx = width / 2;
+      const cy = height / 2;
+      const background = ctx.createRadialGradient(
+        cx,
+        cy,
+        0,
+        cx,
+        cy,
+        Math.hypot(cx, cy),
+      );
+      background.addColorStop(0, backgroundInner);
+      background.addColorStop(1, backgroundOuter);
+      this.background = background;
+      this.backgroundKey = key;
+    }
+
+    ctx.fillStyle = this.background;
+    ctx.fillRect(0, 0, width, height);
   }
 
-  private drawPoint(point: Point) {
-    const ctx = this.ctx;
-    ctx.fillStyle = point.color;
-    ctx.globalAlpha = point.alpha;
-    ctx.beginPath();
-    ctx.arc(point.x, point.y, point.radius, 0, 2 * Math.PI);
-    ctx.fill();
+  private drawPoints() {
+    const { ctx } = this;
+    const { minRadius, maxRadius, pointColor } = this.settings;
+    const largest = Math.max(minRadius, maxRadius);
+
+    ctx.fillStyle = pointColor;
+    this.points.forEach((point) => {
+      const radius = minRadius + point.size * (maxRadius - minRadius);
+      ctx.globalAlpha = radius / largest;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
+      ctx.fill();
+    });
   }
 
   private drawConnections() {
-    const { ctx, cells, cols, rows } = this;
+    const { ctx, cells, cols, rows, connectDistance } = this;
+    const { fade, lineColor, lineWidth } = this.settings;
 
     cells.forEach((cell) => {
       cell.length = 0;
     });
     this.points.forEach((point) => {
-      cells[cellIndex(point.y, rows) * cols + cellIndex(point.x, cols)].push(
-        point,
-      );
+      const row = cellIndex(point.y, rows, connectDistance);
+      const col = cellIndex(point.x, cols, connectDistance);
+      cells[row * cols + col].push(point);
     });
 
-    const paths = STROKE_STYLES.map(() => new Path2D());
+    const paths = Array.from({ length: ALPHA_LEVELS + 1 }, () => new Path2D());
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -181,7 +222,7 @@ export class Simulator {
 
         for (let i = 0; i < cell.length; i++) {
           for (let j = i + 1; j < cell.length; j++) {
-            addConnection(paths, cell[i], cell[j]);
+            addConnection(paths, cell[i], cell[j], connectDistance, fade);
           }
         }
 
@@ -194,15 +235,17 @@ export class Simulator {
 
           for (const point of cell) {
             for (const other of cells[r * cols + c]) {
-              addConnection(paths, point, other);
+              addConnection(paths, point, other, connectDistance, fade);
             }
           }
         }
       }
     }
 
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = Math.max(lineWidth, 1 / this.dpr);
     for (let level = 1; level <= ALPHA_LEVELS; level++) {
-      ctx.strokeStyle = STROKE_STYLES[level];
+      ctx.globalAlpha = level / ALPHA_LEVELS;
       ctx.stroke(paths[level]);
     }
   }

@@ -19,7 +19,11 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@tweakpane/core": "2.0.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "tweakpane": "^4.0.5"
   }
 }

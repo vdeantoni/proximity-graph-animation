@@ -21,6 +21,37 @@ body {
   height: 100%;
 }
 
+#panel-toggle {
+  display: flex;
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition:
+    color ease 200ms,
+    background-color ease 200ms;
+}
+
+#panel-toggle:hover,
+#panel-toggle[aria-expanded='true'] {
+  background-color: rgba(255, 255, 255, 0.16);
+  color: white;
+}
+
+#panel {
+  position: absolute;
+  top: 3.5rem;
+  right: 0.75rem;
+  width: 280px;
+  max-height: calc(100% - 4.25rem);
+  overflow-y: auto;
+}
+
 #madeby {
   display: flex;
   position: absolute;
