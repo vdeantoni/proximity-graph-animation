@@ -19,7 +19,12 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
-    "vite": "^8.0.0"
+    "@tweakpane/core": "2.0.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "delaunator": "^5.1.0",
+    "tweakpane": "^4.0.5"
   }
 }
