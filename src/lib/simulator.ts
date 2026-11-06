@@ -11,6 +11,7 @@ function wrap(value: number, size: number) {
 }
 
 export class Simulator {
+  private ctx: CanvasRenderingContext2D;
   private density: number;
   private points: Point[] = [];
   private last: number = 0;
@@ -19,11 +20,8 @@ export class Simulator {
   private dpr = 0;
 
   constructor(private canvas: HTMLCanvasElement, { density = DENSITY } = {}) {
+    this.ctx = canvas.getContext('2d')!;
     this.density = density;
-  }
-
-  private getContext() {
-    return this.canvas.getContext('2d')!;
   }
 
   public start = () => {
@@ -40,7 +38,7 @@ export class Simulator {
 
     this.canvas.width = Math.round(width * dpr);
     this.canvas.height = Math.round(height * dpr);
-    this.getContext().setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const margin = CONNECT_DISTANCE;
     const scaleX = (width + 2 * margin) / (this.width + 2 * margin);
@@ -70,10 +68,6 @@ export class Simulator {
 
     this.fit();
 
-    const ctx = this.getContext();
-
-    ctx.clearRect(0, 0, this.width, this.height);
-
     this.drawBackground();
 
     this.points.forEach((point) => {
@@ -82,16 +76,7 @@ export class Simulator {
       point.y = wrap(point.y, this.height);
     });
 
-    const connections = new Map<Point, Set<Point>>();
-    this.points.forEach((point) => {
-      this.processConnections(point, connections);
-    });
-
-    connections.forEach((others, point) => {
-      others.forEach((other) => {
-        this.drawConnection(point, other);
-      });
-    });
+    this.drawConnections();
 
     this.points.forEach((point) => {
       this.drawPoint(point);
@@ -103,63 +88,45 @@ export class Simulator {
   };
 
   private drawBackground() {
-    const ctx = this.getContext();
-    ctx.fillStyle = 'black';
-    ctx.fillRect(0, 0, this.width, this.height);
+    this.ctx.fillStyle = 'black';
+    this.ctx.fillRect(0, 0, this.width, this.height);
   }
 
   private drawPoint(point: Point) {
-    const ctx = this.getContext();
+    const ctx = this.ctx;
     ctx.fillStyle = point.color;
     ctx.beginPath();
     ctx.arc(point.x, point.y, point.radius, 0, 2 * Math.PI);
     ctx.fill();
   }
 
-  private processConnections(
-    point: Point,
-    connections: Map<Point, Set<Point>>,
-  ) {
-    connections.set(point, new Set());
+  private drawConnections() {
+    const { ctx, points } = this;
 
-    for (let other of this.points) {
-      if (point === other || connections.get(other)?.has(point)) {
-        continue;
-      }
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
 
-      const cwr = point.x + CONNECT_DISTANCE;
-      const cwl = point.x - CONNECT_DISTANCE;
-      const cht = point.y - CONNECT_DISTANCE;
-      const chb = point.y + CONNECT_DISTANCE;
+      for (let j = i + 1; j < points.length; j++) {
+        const other = points[j];
 
-      if (
-        (cwr < this.width && other.x > cwr) ||
-        (cwl >= 0 && other.x < cwl) ||
-        (cht >= 0 && other.y < cht) ||
-        (chb < this.height && other.y > chb)
-      ) {
-        continue;
-      }
+        if (
+          Math.abs(other.x - point.x) >= CONNECT_DISTANCE ||
+          Math.abs(other.y - point.y) >= CONNECT_DISTANCE
+        ) {
+          continue;
+        }
 
-      const distance = point.distance(other);
-      if (distance < CONNECT_DISTANCE) {
-        connections.get(point)!.add(other);
+        const distance = point.distance(other);
+        if (distance >= CONNECT_DISTANCE) {
+          continue;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(point.x, point.y);
+        ctx.lineTo(other.x, other.y);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${1 - distance / CONNECT_DISTANCE})`;
+        ctx.stroke();
       }
     }
-  }
-
-  private drawConnection(point: Point, other: Point) {
-    const ctx = this.getContext();
-    const distance = point.distance(other);
-
-    ctx.beginPath();
-
-    ctx.moveTo(point.x, point.y);
-    ctx.lineTo(other.x, other.y);
-
-    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.abs(
-      distance / CONNECT_DISTANCE - 1,
-    )})`;
-    ctx.stroke();
   }
 }

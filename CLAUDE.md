@@ -22,7 +22,7 @@ This is a vanilla TypeScript canvas animation that renders a proximity graph: po
 
 **Core classes:**
 
-- **`Simulator`** (`src/lib/simulator.ts`) owns the `requestAnimationFrame` loop. Each frame it fits the canvas to its CSS size, moves and wraps points, finds pairs closer than `CONNECT_DISTANCE` (bounding-box pre-filter, then Euclidean distance, each pair stored once), and draws background, lines, then points. Line opacity is `1 - distance / CONNECT_DISTANCE`.
+- **`Simulator`** (`src/lib/simulator.ts`) owns the `requestAnimationFrame` loop. Each frame it fits the canvas to its CSS size, draws the background, moves and wraps points, then visits each pair once (bounding-box check, then Euclidean distance) and strokes a line for every pair closer than `CONNECT_DISTANCE` before drawing the points on top. Line opacity is `1 - distance / CONNECT_DISTANCE`.
 - **`Point`** (`src/lib/point.ts`) holds position, velocity, radius and color. `move(delta)` scales velocity by `delta`; `Point.create()` picks a uniform direction and a velocity spread evenly over a disk of radius `MAX_SPEED`.
 
 Tunable parameters live in `src/lib/constants.ts`. Behavior that spans these files:

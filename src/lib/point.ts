@@ -14,14 +14,14 @@ export class Point {
     public color: string,
   ) {}
 
-  public move = (delta: number) => {
+  public move(delta: number) {
     this.x += this.vx * delta;
     this.y += this.vy * delta;
-  };
+  }
 
-  public distance = (other: Point) => {
+  public distance(other: Point) {
     return Math.sqrt((other.x - this.x) ** 2 + (other.y - this.y) ** 2);
-  };
+  }
 
   public static create(minX: number, minY: number, maxX: number, maxY: number) {
     const angle = random(0, 2 * Math.PI);
