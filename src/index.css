@@ -19,6 +19,8 @@ body {
 
   width: 100%;
   height: 100%;
+
+  touch-action: none;
 }
 
 #panel-toggle {
@@ -48,7 +50,8 @@ body {
   top: 3.5rem;
   right: 0.75rem;
   width: 280px;
-  max-height: calc(100% - 4.25rem);
+  /* Ends above the #madeby badge in the bottom-right corner */
+  max-height: calc(100% - 7.25rem);
   overflow-y: auto;
 }
 

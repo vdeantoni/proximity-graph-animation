@@ -4,6 +4,10 @@ import { Point } from './point';
 
 const TIME_PER_FRAME = 1000 / FPS;
 const ALPHA_LEVELS = 32;
+// Push velocity keeps this share per reference frame, settling in about a second
+const PUSH_DECAY = 0.95;
+// Inward pull mixed into the vortex swirl so points orbit instead of flying off
+const VORTEX_PULL = 0.35;
 // Cells are as wide as the connect distance, so connected points share a cell
 // or touch. Only half the neighbors are listed so each cell pair is visited once.
 const NEIGHBORS = [
@@ -24,17 +28,27 @@ function cellIndex(value: number, count: number, cellSize: number) {
   return Math.min(count - 1, Math.max(0, index));
 }
 
+function levelAt(distance: number, maxDistance: number, fade: number) {
+  if (distance >= maxDistance) {
+    return 0;
+  }
+  return Math.round((1 - distance / maxDistance) ** fade * ALPHA_LEVELS);
+}
+
 function connectionLevel(
   point: Point,
   other: Point,
   maxDistance: number,
   fade: number,
 ) {
-  const distance = point.distance(other);
-  if (distance >= maxDistance) {
-    return 0;
-  }
-  return Math.round((1 - distance / maxDistance) ** fade * ALPHA_LEVELS);
+  return levelAt(point.distance(other), maxDistance, fade);
+}
+
+interface Shockwave {
+  x: number;
+  y: number;
+  radius: number;
+  hit: Set<Point>;
 }
 
 interface TriangleFade {
@@ -67,6 +81,8 @@ export class Simulator {
   private coords = new Float64Array(0);
   private delaunay?: Delaunator<Float64Array>;
   private frame = 0;
+  private pointer: { x: number; y: number } | null = null;
+  private waves: Shockwave[] = [];
   private cols = 0;
   private rows = 0;
   private last: number = 0;
@@ -88,6 +104,20 @@ export class Simulator {
   public start = () => {
     window.requestAnimationFrame(this.loop);
   };
+
+  public setPointer(x: number, y: number) {
+    this.pointer = { x, y };
+  }
+
+  public clearPointer() {
+    this.pointer = null;
+  }
+
+  public shockwave(x: number, y: number) {
+    if (this.settings.shockwave) {
+      this.waves.push({ x, y, radius: 0, hit: new Set() });
+    }
+  }
 
   public randomize() {
     this.points.length = 0;
@@ -163,9 +193,15 @@ export class Simulator {
     this.drawBackground();
 
     if (!settings.paused) {
+      // After a long pause (hidden tab) forces would otherwise act for minutes
+      const pushDelta = Math.min(delta, 4);
+      this.applyPointerForce(pushDelta);
+      this.updateShockwaves(delta);
+
       const step = delta * settings.maxSpeed;
+      const pushDecay = PUSH_DECAY ** pushDelta;
       this.points.forEach((point) => {
-        point.move(step);
+        point.move(step, pushDelta, pushDecay);
         point.x = wrap(point.x, this.width, this.connectDistance);
         point.y = wrap(point.y, this.height, this.connectDistance);
       });
@@ -176,11 +212,99 @@ export class Simulator {
       : 'source-over';
     this.drawConnections(delta);
     this.drawPoints();
+    this.drawShockwaves();
 
     this.last = timestamp;
 
     window.requestAnimationFrame(this.loop);
   };
+
+  private applyPointerForce(delta: number) {
+    const { pointer } = this;
+    const { mouseMode, mouseRadius, mouseStrength } = this.settings;
+    if (!pointer || mouseMode === 'off') {
+      return;
+    }
+
+    this.points.forEach((point) => {
+      const dx = pointer.x - point.x;
+      const dy = pointer.y - point.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance >= mouseRadius || distance < 1) {
+        return;
+      }
+
+      // Scaled by 1 / distance so dx and dy act as a unit direction
+      const force =
+        (mouseStrength * (1 - distance / mouseRadius) ** 2 * delta) / distance;
+      if (mouseMode === 'attract') {
+        point.pushX += dx * force;
+        point.pushY += dy * force;
+      } else if (mouseMode === 'repel') {
+        point.pushX -= dx * force;
+        point.pushY -= dy * force;
+      } else {
+        point.pushX += (-dy + dx * VORTEX_PULL) * force;
+        point.pushY += (dx + dy * VORTEX_PULL) * force;
+      }
+    });
+  }
+
+  // Each wave kicks a point once, when its ring first covers it. Tracking hits
+  // matters because a kicked point can move ahead of the ring into its next band.
+  private updateShockwaves(delta: number) {
+    const { shockwaveReach, shockwaveSpeed, shockwaveStrength } = this.settings;
+
+    this.waves = this.waves.filter((wave) => {
+      const to = Math.min(
+        shockwaveReach,
+        wave.radius + (shockwaveSpeed * delta * TIME_PER_FRAME) / 1000,
+      );
+      const kick = shockwaveStrength * (1 - to / shockwaveReach);
+
+      this.points.forEach((point) => {
+        const dx = point.x - wave.x;
+        const dy = point.y - wave.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < to && distance > 0 && !wave.hit.has(point)) {
+          wave.hit.add(point);
+          point.pushX += (dx / distance) * kick;
+          point.pushY += (dy / distance) * kick;
+        }
+      });
+
+      wave.radius = to;
+      return to < shockwaveReach;
+    });
+  }
+
+  // Multiplier for line and triangle opacity around the cursor
+  private flashlight(x: number, y: number) {
+    const { pointer } = this;
+    const { flashlight, flashlightRadius, flashlightBoost } = this.settings;
+    if (!pointer || !flashlight) {
+      return 1;
+    }
+
+    const distance = Math.sqrt((x - pointer.x) ** 2 + (y - pointer.y) ** 2);
+    if (distance >= flashlightRadius) {
+      return 1;
+    }
+    return 1 + flashlightBoost * (1 - distance / flashlightRadius) ** 2;
+  }
+
+  private drawShockwaves() {
+    const { ctx, waves } = this;
+    const { shockwaveReach, lineColor } = this.settings;
+
+    ctx.strokeStyle = lineColor;
+    waves.forEach((wave) => {
+      ctx.globalAlpha = Math.max(0, 0.5 * (1 - wave.radius / shockwaveReach));
+      ctx.beginPath();
+      ctx.arc(wave.x, wave.y, wave.radius, 0, 2 * Math.PI);
+      ctx.stroke();
+    });
+  }
 
   private drawBackground() {
     const { ctx, width, height } = this;
@@ -225,8 +349,14 @@ export class Simulator {
 
   private drawConnections(delta: number) {
     const { ctx, cells, cols, rows, connectDistance, points, links } = this;
-    const { fade, lineColor, lineWidth, triangles, triangleStyle } =
-      this.settings;
+    const {
+      fade,
+      lineColor,
+      lineWidth,
+      triangles,
+      triangleStyle,
+      cursorLinks,
+    } = this.settings;
     const recordLinks = triangles && triangleStyle === 'overlapping';
 
     cells.forEach((cell) => {
@@ -248,13 +378,26 @@ export class Simulator {
     }
 
     const paths = Array.from({ length: ALPHA_LEVELS + 1 }, () => new Path2D());
+    const addLine = (
+      ax: number,
+      ay: number,
+      bx: number,
+      by: number,
+      level: number,
+    ) => {
+      const lit = Math.round(
+        level * this.flashlight((ax + bx) / 2, (ay + by) / 2),
+      );
+      const path = paths[Math.min(ALPHA_LEVELS, lit)];
+      path.moveTo(ax, ay);
+      path.lineTo(bx, by);
+    };
     const connect = (a: number, b: number) => {
       const point = points[a];
       const other = points[b];
       const level = connectionLevel(point, other, connectDistance, fade);
       if (level > 0) {
-        paths[level].moveTo(point.x, point.y);
-        paths[level].lineTo(other.x, other.y);
+        addLine(point.x, point.y, other.x, other.y, level);
         if (recordLinks) {
           links[Math.min(a, b)].push(Math.max(a, b), level);
         }
@@ -285,6 +428,19 @@ export class Simulator {
           }
         }
       }
+    }
+
+    const { pointer } = this;
+    if (pointer && cursorLinks) {
+      points.forEach((point) => {
+        const distance = Math.sqrt(
+          (point.x - pointer.x) ** 2 + (point.y - pointer.y) ** 2,
+        );
+        const level = levelAt(distance, connectDistance, fade);
+        if (level > 0) {
+          addLine(pointer.x, pointer.y, point.x, point.y, level);
+        }
+      });
     }
 
     if (triangles) {
@@ -361,7 +517,8 @@ export class Simulator {
         }
       }
 
-      ctx.globalAlpha = fade.opacity * triangleOpacity;
+      const lit = this.flashlight((p.x + q.x + r.x) / 3, (p.y + q.y + r.y) / 3);
+      ctx.globalAlpha = Math.min(1, fade.opacity * triangleOpacity * lit);
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
       ctx.lineTo(q.x, q.y);

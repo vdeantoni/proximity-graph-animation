@@ -3,6 +3,11 @@ function random(min: number, max: number) {
 }
 
 export class Point {
+  // Extra velocity from mouse forces and shockwaves, in pixels per reference
+  // frame. It decays so pushed points settle back into their own drift.
+  public pushX = 0;
+  public pushY = 0;
+
   constructor(
     public x: number,
     public y: number,
@@ -11,9 +16,11 @@ export class Point {
     public size: number,
   ) {}
 
-  public move(step: number) {
-    this.x += this.vx * step;
-    this.y += this.vy * step;
+  public move(step: number, pushStep: number, pushDecay: number) {
+    this.x += this.vx * step + this.pushX * pushStep;
+    this.y += this.vy * step + this.pushY * pushStep;
+    this.pushX *= pushDecay;
+    this.pushY *= pushDecay;
   }
 
   public distance(other: Point) {

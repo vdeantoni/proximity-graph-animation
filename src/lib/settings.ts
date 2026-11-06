@@ -6,6 +6,9 @@ export type TriangleShade = (typeof TRIANGLE_SHADES)[number];
 export const TRIANGLE_STYLES = ['mosaic', 'overlapping'] as const;
 export type TriangleStyle = (typeof TRIANGLE_STYLES)[number];
 
+export const MOUSE_MODES = ['off', 'attract', 'repel', 'vortex'] as const;
+export type MouseMode = (typeof MOUSE_MODES)[number];
+
 export const DEFAULT_SETTINGS = {
   paused: false,
   density: 1,
@@ -24,6 +27,17 @@ export const DEFAULT_SETTINGS = {
   triangleColor: '#4d7cff',
   triangleOpacity: 0.3,
   triangleTransition: 400,
+  mouseMode: 'off' as MouseMode,
+  mouseRadius: 150,
+  mouseStrength: 0.1,
+  cursorLinks: true,
+  shockwave: true,
+  shockwaveStrength: 3,
+  shockwaveReach: 400,
+  shockwaveSpeed: 600,
+  flashlight: true,
+  flashlightRadius: 200,
+  flashlightBoost: 3,
   backgroundInner: '#0b1226',
   backgroundOuter: '#000000',
 };
@@ -40,6 +54,13 @@ export const RANGES = {
   lineWidth: { min: 0.25, max: 3, step: 0.05 },
   triangleOpacity: { min: 0, max: 1, step: 0.01 },
   triangleTransition: { min: 0, max: 2000, step: 50 },
+  mouseRadius: { min: 50, max: 500, step: 10 },
+  mouseStrength: { min: 0, max: 0.5, step: 0.01 },
+  shockwaveStrength: { min: 0, max: 10, step: 0.1 },
+  shockwaveReach: { min: 100, max: 1500, step: 50 },
+  shockwaveSpeed: { min: 100, max: 3000, step: 50 },
+  flashlightRadius: { min: 50, max: 600, step: 10 },
+  flashlightBoost: { min: 0, max: 10, step: 0.1 },
 } satisfies Partial<
   Record<keyof Settings, { min: number; max: number; step: number }>
 >;
@@ -52,7 +73,13 @@ const COLOR_KEYS = [
   'backgroundOuter',
 ] as const;
 
-const BOOLEAN_KEYS = ['additive', 'triangles'] as const;
+const BOOLEAN_KEYS = [
+  'additive',
+  'triangles',
+  'cursorLinks',
+  'shockwave',
+  'flashlight',
+] as const;
 
 const STORAGE_KEY = 'proximity-graph-settings';
 
@@ -96,6 +123,10 @@ export function loadSettings(): Settings {
   const style = TRIANGLE_STYLES.find((name) => name === values.triangleStyle);
   if (style) {
     settings.triangleStyle = style;
+  }
+  const mode = MOUSE_MODES.find((name) => name === values.mouseMode);
+  if (mode) {
+    settings.mouseMode = mode;
   }
 
   return settings;

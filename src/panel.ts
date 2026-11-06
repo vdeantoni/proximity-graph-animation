@@ -77,6 +77,52 @@ export function createPanel(settings: Settings, simulator: Simulator) {
     label: 'transition ms',
   });
 
+  const mouse = pane.addFolder({ title: 'Mouse' });
+  mouse.addBinding(settings, 'mouseMode', {
+    label: 'force',
+    options: {
+      off: 'off',
+      attract: 'attract',
+      repel: 'repel',
+      vortex: 'vortex',
+    },
+  });
+  mouse.addBinding(settings, 'mouseRadius', {
+    ...RANGES.mouseRadius,
+    label: 'radius',
+  });
+  mouse.addBinding(settings, 'mouseStrength', {
+    ...RANGES.mouseStrength,
+    label: 'strength',
+  });
+  mouse.addBinding(settings, 'cursorLinks', { label: 'cursor links' });
+
+  const shockwave = pane.addFolder({ title: 'Click shockwave' });
+  shockwave.addBinding(settings, 'shockwave', { label: 'on' });
+  shockwave.addBinding(settings, 'shockwaveStrength', {
+    ...RANGES.shockwaveStrength,
+    label: 'strength',
+  });
+  shockwave.addBinding(settings, 'shockwaveReach', {
+    ...RANGES.shockwaveReach,
+    label: 'reach',
+  });
+  shockwave.addBinding(settings, 'shockwaveSpeed', {
+    ...RANGES.shockwaveSpeed,
+    label: 'speed px/s',
+  });
+
+  const flashlight = pane.addFolder({ title: 'Flashlight' });
+  flashlight.addBinding(settings, 'flashlight', { label: 'on' });
+  flashlight.addBinding(settings, 'flashlightRadius', {
+    ...RANGES.flashlightRadius,
+    label: 'radius',
+  });
+  flashlight.addBinding(settings, 'flashlightBoost', {
+    ...RANGES.flashlightBoost,
+    label: 'boost',
+  });
+
   const background = pane.addFolder({ title: 'Background' });
   background.addBinding(settings, 'backgroundInner', { label: 'center' });
   background.addBinding(settings, 'backgroundOuter', { label: 'edges' });
