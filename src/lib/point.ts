@@ -23,7 +23,7 @@ export class Point {
     this.pushY *= pushDecay;
   }
 
-  public distance(other: Point) {
+  public distance(other: { x: number; y: number }) {
     return Math.sqrt((other.x - this.x) ** 2 + (other.y - this.y) ** 2);
   }
 

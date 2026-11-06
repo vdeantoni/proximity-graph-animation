@@ -96,6 +96,9 @@ export function createPanel(settings: Settings, simulator: Simulator) {
     label: 'strength',
   });
   mouse.addBinding(settings, 'cursorLinks', { label: 'cursor links' });
+  mouse.addBinding(settings, 'cursorTriangles', {
+    label: 'cursor triangles',
+  });
 
   const shockwave = pane.addFolder({ title: 'Click shockwave' });
   shockwave.addBinding(settings, 'shockwave', { label: 'on' });

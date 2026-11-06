@@ -31,6 +31,7 @@ export const DEFAULT_SETTINGS = {
   mouseRadius: 150,
   mouseStrength: 0.1,
   cursorLinks: true,
+  cursorTriangles: false,
   shockwave: true,
   shockwaveStrength: 3,
   shockwaveReach: 400,
@@ -77,6 +78,7 @@ const BOOLEAN_KEYS = [
   'additive',
   'triangles',
   'cursorLinks',
+  'cursorTriangles',
   'shockwave',
   'flashlight',
 ] as const;

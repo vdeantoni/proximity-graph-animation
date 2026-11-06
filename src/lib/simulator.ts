@@ -70,6 +70,13 @@ type TriangleVisitor = (
 
 // Point indices stay below 2^17, so a triangle's three pack exactly into a key
 const INDEX_LIMIT = 2 ** 17;
+// Stands in for the pointer as a triangle vertex; no point index reaches it
+const CURSOR = INDEX_LIMIT - 1;
+
+interface CursorLink {
+  index: number;
+  level: number;
+}
 
 export class Simulator {
   private ctx: CanvasRenderingContext2D;
@@ -356,6 +363,7 @@ export class Simulator {
       triangles,
       triangleStyle,
       cursorLinks,
+      cursorTriangles,
     } = this.settings;
     const recordLinks = triangles && triangleStyle === 'overlapping';
 
@@ -431,20 +439,21 @@ export class Simulator {
     }
 
     const { pointer } = this;
-    if (pointer && cursorLinks) {
-      points.forEach((point) => {
-        const distance = Math.sqrt(
-          (point.x - pointer.x) ** 2 + (point.y - pointer.y) ** 2,
-        );
-        const level = levelAt(distance, connectDistance, fade);
+    const linked: CursorLink[] = [];
+    if (pointer && (cursorLinks || cursorTriangles)) {
+      points.forEach((point, index) => {
+        const level = levelAt(point.distance(pointer), connectDistance, fade);
         if (level > 0) {
-          addLine(pointer.x, pointer.y, point.x, point.y, level);
+          linked.push({ index, level });
+          if (cursorLinks) {
+            addLine(pointer.x, pointer.y, point.x, point.y, level);
+          }
         }
       });
     }
 
-    if (triangles) {
-      this.fillTriangles(delta);
+    if (triangles || (pointer && cursorTriangles)) {
+      this.fillTriangles(delta, linked);
     } else {
       this.fades.clear();
     }
@@ -457,9 +466,11 @@ export class Simulator {
     }
   }
 
-  private fillTriangles(delta: number) {
-    const { ctx, points, fades } = this;
+  private fillTriangles(delta: number, linked: CursorLink[]) {
+    const { ctx, points, fades, pointer } = this;
     const {
+      triangles,
+      cursorTriangles,
       triangleColor,
       triangleOpacity,
       triangleShade,
@@ -485,24 +496,28 @@ export class Simulator {
       fade.frame = frame;
       fade.opacity += (level / ALPHA_LEVELS - fade.opacity) * ease;
     };
-    if (triangleStyle === 'mosaic') {
+    if (triangles && triangleStyle === 'mosaic') {
       this.findMosaicTriangles(show);
-    } else {
+    } else if (triangles) {
       this.findOverlappingTriangles(show);
+    }
+    if (pointer && cursorTriangles) {
+      this.findCursorTriangles(pointer, linked, show);
     }
 
     const maxEdge = 2 * this.connectDistance;
     ctx.fillStyle = triangleColor;
     // One fill per triangle, so overlaps always add up the same way
     fades.forEach((fade, key) => {
-      if (fade.frame !== frame && fade.c >= points.length) {
+      const p = points[fade.a];
+      const q = points[fade.b];
+      const r = fade.c === CURSOR ? pointer : points[fade.c];
+      // A resize removed one of its points, or the pointer left the canvas
+      if (!q || !r) {
         fades.delete(key);
         return;
       }
 
-      const p = points[fade.a];
-      const q = points[fade.b];
-      const r = points[fade.c];
       if (fade.frame !== frame) {
         fade.opacity -= fade.opacity * ease;
         // A vertex that wrapped to the far side would stretch it across the screen
@@ -525,6 +540,58 @@ export class Simulator {
       ctx.lineTo(r.x, r.y);
       ctx.fill();
     });
+  }
+
+  // The cursor plus two linked points that are connected to each other. The
+  // mosaic style keeps only neighbors by angle, a fan that never overlaps.
+  private findCursorTriangles(
+    pointer: { x: number; y: number },
+    linked: CursorLink[],
+    show: TriangleVisitor,
+  ) {
+    const { points, connectDistance } = this;
+    const { fade, triangleStyle } = this.settings;
+
+    const visit = (u: CursorLink, v: CursorLink) => {
+      const [a, b] = u.index < v.index ? [u, v] : [v, u];
+      const ab = connectionLevel(
+        points[a.index],
+        points[b.index],
+        connectDistance,
+        fade,
+      );
+      if (ab > 0) {
+        show(a.index, b.index, CURSOR, ab, b.level, a.level);
+      }
+    };
+
+    if (triangleStyle === 'overlapping') {
+      for (let i = 0; i < linked.length; i++) {
+        for (let j = i + 1; j < linked.length; j++) {
+          visit(linked[i], linked[j]);
+        }
+      }
+      return;
+    }
+
+    const fan = linked
+      .map((link) => {
+        const point = points[link.index];
+        const angle = Math.atan2(point.y - pointer.y, point.x - pointer.x);
+        return { link, angle };
+      })
+      .sort((u, v) => u.angle - v.angle);
+    // With two points the wrap-around pair would repeat the only pair
+    const pairs = fan.length > 2 ? fan.length : fan.length - 1;
+    for (let k = 0; k < pairs; k++) {
+      const u = fan[k];
+      const v = fan[(k + 1) % fan.length];
+      const gap = (v.angle - u.angle + 2 * Math.PI) % (2 * Math.PI);
+      // A wider gap would cover the far side of the cursor and overlap the fan
+      if (gap < Math.PI) {
+        visit(u.link, v.link);
+      }
+    }
   }
 
   // Every mutually connected triple, found once from its lowest index a via b < c
