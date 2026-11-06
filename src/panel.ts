@@ -54,6 +54,18 @@ export function createPanel(settings: Settings, simulator: Simulator) {
   connections.addBinding(settings, 'lineColor', { label: 'color' });
   connections.addBinding(settings, 'additive', { label: 'glow' });
 
+  const triangles = pane.addFolder({ title: 'Triangles' });
+  triangles.addBinding(settings, 'triangles', { label: 'fill' });
+  triangles.addBinding(settings, 'triangleShade', {
+    label: 'shade by',
+    options: { 'weakest edge': 'weakest', 'average edge': 'average' },
+  });
+  triangles.addBinding(settings, 'triangleColor', { label: 'color' });
+  triangles.addBinding(settings, 'triangleOpacity', {
+    ...RANGES.triangleOpacity,
+    label: 'opacity',
+  });
+
   const background = pane.addFolder({ title: 'Background' });
   background.addBinding(settings, 'backgroundInner', { label: 'center' });
   background.addBinding(settings, 'backgroundOuter', { label: 'edges' });

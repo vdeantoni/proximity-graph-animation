@@ -1,5 +1,8 @@
 export const FPS = 60;
 
+export const TRIANGLE_SHADES = ['weakest', 'average'] as const;
+export type TriangleShade = (typeof TRIANGLE_SHADES)[number];
+
 export const DEFAULT_SETTINGS = {
   paused: false,
   density: 1,
@@ -12,6 +15,10 @@ export const DEFAULT_SETTINGS = {
   lineWidth: 0.6,
   lineColor: '#ffffff',
   additive: true,
+  triangles: false,
+  triangleShade: 'weakest' as TriangleShade,
+  triangleColor: '#4d7cff',
+  triangleOpacity: 0.3,
   backgroundInner: '#0b1226',
   backgroundOuter: '#000000',
 };
@@ -26,6 +33,7 @@ export const RANGES = {
   connectDistance: { min: 40, max: 250, step: 5 },
   fade: { min: 0.5, max: 4, step: 0.1 },
   lineWidth: { min: 0.25, max: 3, step: 0.05 },
+  triangleOpacity: { min: 0, max: 1, step: 0.01 },
 } satisfies Partial<
   Record<keyof Settings, { min: number; max: number; step: number }>
 >;
@@ -33,9 +41,12 @@ export const RANGES = {
 const COLOR_KEYS = [
   'pointColor',
   'lineColor',
+  'triangleColor',
   'backgroundInner',
   'backgroundOuter',
 ] as const;
+
+const BOOLEAN_KEYS = ['additive', 'triangles'] as const;
 
 const STORAGE_KEY = 'proximity-graph-settings';
 
@@ -66,8 +77,15 @@ export function loadSettings(): Settings {
       settings[key] = value;
     }
   }
-  if (typeof values.additive === 'boolean') {
-    settings.additive = values.additive;
+  for (const key of BOOLEAN_KEYS) {
+    const value = values[key];
+    if (typeof value === 'boolean') {
+      settings[key] = value;
+    }
+  }
+  const shade = TRIANGLE_SHADES.find((name) => name === values.triangleShade);
+  if (shade) {
+    settings.triangleShade = shade;
   }
 
   return settings;

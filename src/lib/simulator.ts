@@ -23,8 +23,7 @@ function cellIndex(value: number, count: number, cellSize: number) {
   return Math.min(count - 1, Math.max(0, index));
 }
 
-function addConnection(
-  paths: Path2D[],
+function connectionLevel(
   point: Point,
   other: Point,
   maxDistance: number,
@@ -32,20 +31,21 @@ function addConnection(
 ) {
   const distance = point.distance(other);
   if (distance >= maxDistance) {
-    return;
+    return 0;
   }
+  return Math.round((1 - distance / maxDistance) ** fade * ALPHA_LEVELS);
+}
 
-  const level = Math.round((1 - distance / maxDistance) ** fade * ALPHA_LEVELS);
-  if (level > 0) {
-    paths[level].moveTo(point.x, point.y);
-    paths[level].lineTo(other.x, other.y);
-  }
+function createPaths() {
+  return Array.from({ length: ALPHA_LEVELS + 1 }, () => new Path2D());
 }
 
 export class Simulator {
   private ctx: CanvasRenderingContext2D;
   private points: Point[] = [];
-  private cells: Point[][] = [];
+  private cells: number[][] = [];
+  // links[a] holds [b, level, b, level, ...] for each connection to a later b
+  private links: number[][] = [];
   private cols = 0;
   private rows = 0;
   private last: number = 0;
@@ -202,19 +202,40 @@ export class Simulator {
   }
 
   private drawConnections() {
-    const { ctx, cells, cols, rows, connectDistance } = this;
-    const { fade, lineColor, lineWidth } = this.settings;
+    const { ctx, cells, cols, rows, connectDistance, points, links } = this;
+    const { fade, lineColor, lineWidth, triangles } = this.settings;
 
     cells.forEach((cell) => {
       cell.length = 0;
     });
-    this.points.forEach((point) => {
+    points.forEach((point, index) => {
       const row = cellIndex(point.y, rows, connectDistance);
       const col = cellIndex(point.x, cols, connectDistance);
-      cells[row * cols + col].push(point);
+      cells[row * cols + col].push(index);
     });
 
-    const paths = Array.from({ length: ALPHA_LEVELS + 1 }, () => new Path2D());
+    if (triangles) {
+      while (links.length < points.length) {
+        links.push([]);
+      }
+      links.forEach((link) => {
+        link.length = 0;
+      });
+    }
+
+    const paths = createPaths();
+    const connect = (a: number, b: number) => {
+      const point = points[a];
+      const other = points[b];
+      const level = connectionLevel(point, other, connectDistance, fade);
+      if (level > 0) {
+        paths[level].moveTo(point.x, point.y);
+        paths[level].lineTo(other.x, other.y);
+        if (triangles) {
+          links[Math.min(a, b)].push(Math.max(a, b), level);
+        }
+      }
+    };
 
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -222,7 +243,7 @@ export class Simulator {
 
         for (let i = 0; i < cell.length; i++) {
           for (let j = i + 1; j < cell.length; j++) {
-            addConnection(paths, cell[i], cell[j], connectDistance, fade);
+            connect(cell[i], cell[j]);
           }
         }
 
@@ -233,13 +254,17 @@ export class Simulator {
             continue;
           }
 
-          for (const point of cell) {
-            for (const other of cells[r * cols + c]) {
-              addConnection(paths, point, other, connectDistance, fade);
+          for (const a of cell) {
+            for (const b of cells[r * cols + c]) {
+              connect(a, b);
             }
           }
         }
       }
+    }
+
+    if (triangles) {
+      this.fillTriangles();
     }
 
     ctx.strokeStyle = lineColor;
@@ -247,6 +272,58 @@ export class Simulator {
     for (let level = 1; level <= ALPHA_LEVELS; level++) {
       ctx.globalAlpha = level / ALPHA_LEVELS;
       ctx.stroke(paths[level]);
+    }
+  }
+
+  private fillTriangles() {
+    const { ctx, points, links } = this;
+    const { triangleColor, triangleOpacity, triangleShade } = this.settings;
+    const paths = createPaths();
+
+    // Each triangle is found once, from its lowest index a through b < c
+    for (let a = 0; a < points.length; a++) {
+      const linksA = links[a];
+      for (let i = 0; i < linksA.length; i += 2) {
+        const b = linksA[i];
+        const linksB = links[b];
+        for (let j = 0; j < linksB.length; j += 2) {
+          const c = linksB[j];
+          let k = 0;
+          while (k < linksA.length && linksA[k] !== c) {
+            k += 2;
+          }
+          if (k === linksA.length) {
+            continue;
+          }
+
+          const ab = linksA[i + 1];
+          const bc = linksB[j + 1];
+          const ac = linksA[k + 1];
+          const level =
+            triangleShade === 'weakest'
+              ? Math.min(ab, bc, ac)
+              : Math.round((ab + bc + ac) / 3);
+
+          const p = points[a];
+          let q = points[b];
+          let r = points[c];
+          // Overlapping triangles cancel out under the nonzero fill rule unless
+          // they all wind the same way
+          if ((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x) < 0) {
+            [q, r] = [r, q];
+          }
+          paths[level].moveTo(p.x, p.y);
+          paths[level].lineTo(q.x, q.y);
+          paths[level].lineTo(r.x, r.y);
+          paths[level].closePath();
+        }
+      }
+    }
+
+    ctx.fillStyle = triangleColor;
+    for (let level = 1; level <= ALPHA_LEVELS; level++) {
+      ctx.globalAlpha = (level / ALPHA_LEVELS) * triangleOpacity;
+      ctx.fill(paths[level]);
     }
   }
 }
